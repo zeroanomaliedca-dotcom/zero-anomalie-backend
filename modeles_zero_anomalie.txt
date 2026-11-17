@@ -1,0 +1,331 @@
+﻿
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\anomaly.py ==========
+from datetime import datetime, timezone
+
+from app.extensions import db
+from app.models.sector import Sector
+from app.models.category import Category
+
+
+class Anomaly(db.Model):
+    __tablename__ = "anomalies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    reference = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    declaration_method = db.Column(db.String(30), nullable=False)
+    status = db.Column(db.String(40), default="EN_ATTENTE", nullable=False, index=True)
+
+    sector_id = db.Column(db.Integer, db.ForeignKey("sectors.id"), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=False)
+    technician_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+
+    latitude = db.Column(db.Numeric(10, 7), nullable=True)
+    longitude = db.Column(db.Numeric(10, 7), nullable=True)
+    location_address = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    treated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    photos = db.relationship("AnomalyPhoto", backref="anomaly", lazy=True, cascade="all, delete-orphan")
+    histories = db.relationship("History", backref="anomaly", lazy=True, cascade="all, delete-orphan")
+
+    def to_dict(self):
+        sector = db.session.get(Sector, self.sector_id)
+        category = db.session.get(Category, self.category_id)
+
+        return {
+            "id": self.id,
+            "reference": self.reference,
+            "title": self.title,
+            "description": self.description,
+            "declaration_method": self.declaration_method,
+            "status": self.status,
+            "sector_id": self.sector_id,
+            "sector_name": sector.name if sector else None,
+            "category_id": self.category_id,
+            "category_name": category.name if category else None,
+            "technician_id": self.technician_id,
+            "latitude": float(self.latitude) if self.latitude is not None else None,
+            "longitude": float(self.longitude) if self.longitude is not None else None,
+            "location_address": self.location_address,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "treated_at": self.treated_at.isoformat() if self.treated_at else None,
+            "photos": [
+                {"id": photo.id, "photo_type": photo.photo_type}
+                for photo in self.photos
+            ],
+        }
+
+
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\anomaly_photo.py ==========
+
+from datetime import datetime, timezone
+
+from app.extensions import db
+
+
+class AnomalyPhoto(db.Model):
+    __tablename__ = "anomaly_photos"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    anomaly_id = db.Column(
+        db.Integer,
+        db.ForeignKey("anomalies.id"),
+        nullable=False
+    )
+
+    file_path = db.Column(
+        db.String(500),
+        nullable=False
+    )
+
+    photo_type = db.Column(
+        db.String(30),
+        nullable=False
+    )
+
+    uploaded_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    uploaded_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False
+    )
+
+
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\category.py ==========
+
+from datetime import datetime, timezone
+
+from app.extensions import db
+
+
+class Category(db.Model):
+    __tablename__ = "categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    name = db.Column(
+        db.String(150),
+        unique=True,
+        nullable=False
+    )
+
+    description = db.Column(db.Text, nullable=True)
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "is_active": self.is_active
+        }
+
+
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\history.py ==========
+
+from datetime import datetime, timezone
+
+from app.extensions import db
+
+
+class History(db.Model):
+    __tablename__ = "history"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    anomaly_id = db.Column(
+        db.Integer,
+        db.ForeignKey("anomalies.id"),
+        nullable=False
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False
+    )
+
+    old_status = db.Column(db.String(40), nullable=True)
+
+    new_status = db.Column(db.String(40), nullable=False)
+
+    comment = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\sector.py ==========
+
+from app.extensions import db
+
+
+user_sectors = db.Table(
+    "user_sectors",
+    db.Column(
+        "user_id",
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True
+    ),
+    db.Column(
+        "sector_id",
+        db.Integer,
+        db.ForeignKey("sectors.id", ondelete="CASCADE"),
+        primary_key=True
+    )
+)
+
+
+class Sector(db.Model):
+    __tablename__ = "sectors"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    name = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=False
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False
+    )
+
+    users = db.relationship(
+        "User",
+        secondary=user_sectors,
+        back_populates="sectors",
+        lazy="select"
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "is_active": self.is_active
+        }
+
+
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\user.py ==========
+
+from datetime import datetime, timezone
+
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from app.extensions import db
+from app.models.sector import user_sectors
+
+
+class User(db.Model):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    username = db.Column(
+        db.String(80),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    full_name = db.Column(
+        db.String(150),
+        nullable=False
+    )
+
+    password_hash = db.Column(
+        db.String(255),
+        nullable=False
+    )
+
+    role = db.Column(
+        db.String(30),
+        nullable=False
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    sectors = db.relationship(
+        "Sector",
+        secondary=user_sectors,
+        back_populates="users",
+        lazy="select"
+    )
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "full_name": self.full_name,
+            "role": self.role,
+            "sector_ids": [sector.id for sector in self.sectors],
+            "sectors": [sector.name for sector in self.sectors],
+            "is_active": self.is_active
+        }
+
+
+========== C:\Projets\ZERO_ANOMALIE\backend\app\models\__init__.py ==========
+
+from app.models.sector import Sector
+from app.models.user import User
+from app.models.category import Category
+from app.models.anomaly import Anomaly
+from app.models.anomaly_photo import AnomalyPhoto
+from app.models.history import History
+
+__all__ = [
+    "Sector",
+    "User",
+    "Category",
+    "Anomaly",
+    "AnomalyPhoto",
+    "History"
+]
+
