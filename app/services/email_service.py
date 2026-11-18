@@ -18,15 +18,25 @@ from app.models import Category, Sector, User
 # Destinataires configurés selon le secteur de l'anomalie.
 SECTOR_RECIPIENTS = {
     "INZEGANE": {
-        "to": ["i.elayyate@iam.ma"],
+        "to": [
+            "i.elayyate@iam.ma",
+            "H.Mohammed3@iam.ma",
+        ],
         "cc": [],
     },
     "AIT MELLOUL": {
-        "to": ["i.elayyate@iam.ma"],
+        "to": [
+            "i.elayyate@iam.ma",
+            "H.Mohammed3@iam.ma",
+        ],
         "cc": [],
     },
     "AGADIR": {
-        "to": ["i.elayyate@iam.ma"],
+        "to": [
+            "i.elayyate@iam.ma",
+            "Y.Mraouhi@iam.ma",
+            "Y.Benayad@iam.ma",
+        ],
         "cc": [],
     },
 }
