@@ -9,17 +9,17 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
-    # 1. Priorité à DATABASE_URL (Render/Neon)
-    # 2. Sinon, construction locale (votre code actuel)
+    # 1. Priorité à DATABASE_URL (Railway/Neon)
+    # 2. Sinon, construction locale
     if os.getenv("DATABASE_URL"):
-        # Neon fournit une URL qui commence par postgresql://
-        # SQLAlchemy avec psycopg2 attend postgresql+psycopg2://
+        # On s'assure d'utiliser le driver psycopg2
         SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL").replace(
             "postgresql://", "postgresql+psycopg2://", 1
         )
     else:
+        # On utilise psycopg2 pour être cohérent avec Railway
         SQLALCHEMY_DATABASE_URI = (
-            f"postgresql+psycopg://"
+            f"postgresql+psycopg2://"
             f"{os.getenv('DB_USER')}:"
             f"{os.getenv('DB_PASSWORD')}@"
             f"localhost:{os.getenv('DB_PORT')}/"
