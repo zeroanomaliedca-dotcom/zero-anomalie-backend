@@ -18,7 +18,7 @@ sectors_bp = Blueprint(
 # ==========================================
 # GET : LISTE DES SECTEURS
 # ADMIN : tous les secteurs
-# CHEF_SECTEUR : uniquement ses secteurs actifs
+# CHEF_SECTEUR : tous les secteurs actifs
 # TECHNICIEN : tous les secteurs actifs
 # ==========================================
 @sectors_bp.get("")
@@ -38,22 +38,9 @@ def list_sectors():
         # L'administrateur voit tous les secteurs,
         # y compris les secteurs désactivés.
         pass
-
-    elif user.role == "CHEF_SECTEUR":
-        # Le chef de secteur voit uniquement
-        # les secteurs qui lui sont attribués et actifs.
-        assigned_sector_ids = [
-            sector.id
-            for sector in user.sectors
-            if sector.is_active
-        ]
-
-        query = query.filter(
-            Sector.id.in_(assigned_sector_ids)
-        )
-
     else:
-        # Les autres utilisateurs voient tous les secteurs actifs.
+        # Le chef de secteur et le technicien voient
+        # tous les secteurs actifs.
         query = query.filter_by(is_active=True)
 
     sectors = query.order_by(Sector.name.asc()).all()

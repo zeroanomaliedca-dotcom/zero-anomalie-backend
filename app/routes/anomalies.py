@@ -10,8 +10,6 @@ from app.models import Anomaly
 from app.services.permissions import (
     current_user,
     role_required,
-    user_can_access_anomaly,
-    user_can_access_sector,
 )
 
 from app.services.anomaly_service import (
@@ -23,12 +21,19 @@ from app.services.anomaly_query_service import get_anomalies_for_user
 from app.services.treatment_service import update_anomaly_status
 from app.services.email_service import send_declaration_notification
 
+
 anomalies_bp = Blueprint(
     "anomalies",
     __name__,
     url_prefix="/api/anomalies"
 )
 
+
+# ==========================================
+# POST : CREATION D'UNE ANOMALIE
+# ADMIN, CHEF_SECTEUR et TECHNICIEN
+# Le CHEF_SECTEUR peut choisir n'importe quel secteur.
+# ==========================================
 @anomalies_bp.post("")
 @jwt_required()
 @role_required("ADMIN", "CHEF_SECTEUR", "TECHNICIEN")
@@ -46,16 +51,6 @@ def create_declaration():
     try:
         sector_id = int(data.get("sector_id", ""))
         category_id = int(data.get("category_id", ""))
-
-        # Le chef de secteur ne peut déclarer que dans son propre secteur.
-        if (
-            user.role == "CHEF_SECTEUR"
-            and not user_can_access_sector(user, sector_id)
-        ):
-            return jsonify({
-                "status": "error",
-                "message": "Vous ne pouvez déclarer une anomalie que dans votre secteur."
-            }), 403
 
         anomaly = create_anomaly(
             technician_id=user.id,
@@ -121,6 +116,13 @@ def create_declaration():
             "message": "Erreur lors de l'enregistrement des photos."
         }), 500
 
+
+# ==========================================
+# GET : LISTE DES ANOMALIES
+# ADMIN : toutes les anomalies
+# CHEF_SECTEUR : anomalies des trois secteurs
+# TECHNICIEN : selon ses droits actuels
+# ==========================================
 @anomalies_bp.get("")
 @jwt_required()
 def list_anomalies():
@@ -143,6 +145,11 @@ def list_anomalies():
         ]
     }), 200
 
+
+# ==========================================
+# GET : MES ANOMALIES
+# TECHNICIEN uniquement
+# ==========================================
 @anomalies_bp.get("/mine")
 @jwt_required()
 def my_anomalies():
@@ -171,6 +178,13 @@ def my_anomalies():
         ]
     }), 200
 
+
+# ==========================================
+# PATCH : MODIFICATION DU STATUT
+# ADMIN et CHEF_SECTEUR
+# Le CHEF_SECTEUR peut traiter les anomalies
+# de tous les secteurs.
+# ==========================================
 @anomalies_bp.patch("/<int:anomaly_id>/status")
 @jwt_required()
 @role_required("ADMIN", "CHEF_SECTEUR")
@@ -191,12 +205,8 @@ def change_anomaly_status(anomaly_id):
             "message": "Anomalie introuvable."
         }), 404
 
-    if not user_can_access_anomaly(user, anomaly):
-        return jsonify({
-            "status": "error",
-            "message": "Vous n'avez pas accès à cette anomalie."
-        }), 403
-
+    # L'ADMIN et le CHEF_SECTEUR peuvent traiter
+    # les anomalies de tous les secteurs.
     new_status = request.form.get("new_status", "").strip()
     comment = request.form.get("comment", "").strip()
     photos = request.files.getlist("photos")
@@ -250,6 +260,12 @@ def change_anomaly_status(anomaly_id):
             "message": "Erreur lors de l'enregistrement des photos."
         }), 500
 
+
+# ==========================================
+# GET : DETAIL D'UNE ANOMALIE
+# ADMIN et CHEF_SECTEUR : accès à tous les secteurs
+# TECHNICIEN : conservation de ses droits actuels
+# ==========================================
 @anomalies_bp.get("/<int:anomaly_id>")
 @jwt_required()
 def get_anomaly_detail(anomaly_id):
@@ -269,11 +285,16 @@ def get_anomaly_detail(anomaly_id):
             "message": "Anomalie introuvable."
         }), 404
 
-    if not user_can_access_anomaly(user, anomaly):
-        return jsonify({
-            "status": "error",
-            "message": "Vous n'avez pas accès à cette anomalie."
-        }), 403
+    # Le contrôle précis des droits sera appliqué
+    # après adaptation de user_can_access_anomaly.
+    if user.role not in ("ADMIN", "CHEF_SECTEUR"):
+        from app.services.permissions import user_can_access_anomaly
+
+        if not user_can_access_anomaly(user, anomaly):
+            return jsonify({
+                "status": "error",
+                "message": "Vous n'avez pas accès à cette anomalie."
+            }), 403
 
     details = get_anomaly_details(anomaly)
 

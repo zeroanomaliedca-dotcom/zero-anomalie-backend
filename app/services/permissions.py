@@ -68,28 +68,38 @@ def role_required(*allowed_roles):
 
 
 def user_can_access_sector(user, sector_id):
-    """Vérifie si un utilisateur peut accéder à un secteur."""
+    """
+    Vérifie si un utilisateur peut accéder à un secteur.
 
-    if not user or user.deleted_at is not None or not user.is_active:
+    ADMIN : tous les secteurs actifs.
+    CHEF_SECTEUR : tous les secteurs actifs.
+    TECHNICIEN : aucun accès supplémentaire par cette fonction.
+    """
+
+    if (
+        not user
+        or user.deleted_at is not None
+        or not user.is_active
+    ):
         return False
 
-    if user.role == ROLE_ADMIN:
+    if user.role in (ROLE_ADMIN, ROLE_CHEF):
         return Sector.query.filter_by(
             id=sector_id,
             is_active=True
         ).first() is not None
 
-    if user.role == ROLE_CHEF:
-        return any(
-            sector.id == sector_id and sector.is_active
-            for sector in user.sectors
-        )
-
     return False
 
 
 def user_can_access_anomaly(user, anomaly):
-    """Vérifie les droits d'accès à une anomalie."""
+    """
+    Vérifie les droits d'accès à une anomalie.
+
+    ADMIN : toutes les anomalies.
+    CHEF_SECTEUR : toutes les anomalies des trois secteurs.
+    TECHNICIEN : uniquement ses propres anomalies.
+    """
 
     if (
         not user
@@ -99,11 +109,8 @@ def user_can_access_anomaly(user, anomaly):
     ):
         return False
 
-    if user.role == ROLE_ADMIN:
+    if user.role in (ROLE_ADMIN, ROLE_CHEF):
         return True
-
-    if user.role == ROLE_CHEF:
-        return user_can_access_sector(user, anomaly.sector_id)
 
     if user.role == ROLE_TECHNICIEN:
         return anomaly.technician_id == user.id
@@ -112,22 +119,27 @@ def user_can_access_anomaly(user, anomaly):
 
 
 def get_accessible_sector_ids(user):
-    """Retourne les secteurs accessibles selon le rôle."""
+    """
+    Retourne les secteurs accessibles selon le rôle.
 
-    if not user or user.deleted_at is not None or not user.is_active:
+    ADMIN : tous les secteurs actifs.
+    CHEF_SECTEUR : tous les secteurs actifs.
+    TECHNICIEN : aucun secteur supplémentaire.
+    """
+
+    if (
+        not user
+        or user.deleted_at is not None
+        or not user.is_active
+    ):
         return []
 
-    if user.role == ROLE_ADMIN:
+    if user.role in (ROLE_ADMIN, ROLE_CHEF):
         return [
             sector.id
-            for sector in Sector.query.filter_by(is_active=True).all()
-        ]
-
-    if user.role == ROLE_CHEF:
-        return [
-            sector.id
-            for sector in user.sectors
-            if sector.is_active
+            for sector in Sector.query.filter_by(
+                is_active=True
+            ).all()
         ]
 
     return []
