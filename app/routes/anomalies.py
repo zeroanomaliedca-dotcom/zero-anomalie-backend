@@ -31,12 +31,11 @@ anomalies_bp = Blueprint(
 
 # ==========================================
 # POST : CREATION D'UNE ANOMALIE
-# ADMIN, CHEF_SECTEUR et TECHNICIEN
-# Le CHEF_SECTEUR peut choisir n'importe quel secteur.
+# ADMIN, CHEF_SERVICE, CHEF_SECTEUR et TECHNICIEN
 # ==========================================
 @anomalies_bp.post("")
 @jwt_required()
-@role_required("ADMIN", "CHEF_SECTEUR", "TECHNICIEN")
+@role_required("ADMIN", "CHEF_SERVICE", "CHEF_SECTEUR", "TECHNICIEN")
 def create_declaration():
     user = current_user()
 
@@ -119,7 +118,7 @@ def create_declaration():
 
 # ==========================================
 # GET : LISTE DES ANOMALIES
-# ADMIN : toutes les anomalies
+# ADMIN et CHEF_SERVICE : toutes les anomalies
 # CHEF_SECTEUR : anomalies des trois secteurs
 # TECHNICIEN : selon ses droits actuels
 # ==========================================
@@ -181,13 +180,11 @@ def my_anomalies():
 
 # ==========================================
 # PATCH : MODIFICATION DU STATUT
-# ADMIN et CHEF_SECTEUR
-# Le CHEF_SECTEUR peut traiter les anomalies
-# de tous les secteurs.
+# ADMIN, CHEF_SERVICE et CHEF_SECTEUR
 # ==========================================
 @anomalies_bp.patch("/<int:anomaly_id>/status")
 @jwt_required()
-@role_required("ADMIN", "CHEF_SECTEUR")
+@role_required("ADMIN", "CHEF_SERVICE", "CHEF_SECTEUR")
 def change_anomaly_status(anomaly_id):
     user = current_user()
 
@@ -205,8 +202,6 @@ def change_anomaly_status(anomaly_id):
             "message": "Anomalie introuvable."
         }), 404
 
-    # L'ADMIN et le CHEF_SECTEUR peuvent traiter
-    # les anomalies de tous les secteurs.
     new_status = request.form.get("new_status", "").strip()
     comment = request.form.get("comment", "").strip()
     photos = request.files.getlist("photos")
@@ -263,7 +258,8 @@ def change_anomaly_status(anomaly_id):
 
 # ==========================================
 # GET : DETAIL D'UNE ANOMALIE
-# ADMIN et CHEF_SECTEUR : accès à tous les secteurs
+# ADMIN, CHEF_SERVICE et CHEF_SECTEUR :
+# accès à toutes les anomalies
 # TECHNICIEN : conservation de ses droits actuels
 # ==========================================
 @anomalies_bp.get("/<int:anomaly_id>")
@@ -285,9 +281,7 @@ def get_anomaly_detail(anomaly_id):
             "message": "Anomalie introuvable."
         }), 404
 
-    # Le contrôle précis des droits sera appliqué
-    # après adaptation de user_can_access_anomaly.
-    if user.role not in ("ADMIN", "CHEF_SECTEUR"):
+    if user.role not in ("ADMIN", "CHEF_SERVICE", "CHEF_SECTEUR"):
         from app.services.permissions import user_can_access_anomaly
 
         if not user_can_access_anomaly(user, anomaly):
