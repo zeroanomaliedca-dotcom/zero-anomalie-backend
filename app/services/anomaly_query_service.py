@@ -1,14 +1,21 @@
 
 from app.models import Anomaly
 
+from app.services.permissions import (
+    ROLE_ADMIN,
+    ROLE_CHEF,
+    ROLE_CHEF_SERVICE,
+    ROLE_TECHNICIEN,
+)
+
 
 def get_anomalies_for_user(user):
     """
     Retourne les anomalies accessibles selon le rôle :
 
-    - ADMIN : toutes les anomalies.
-    - CHEF_SECTEUR : toutes les anomalies des trois secteurs.
-    - TECHNICIEN : uniquement ses propres déclarations.
+    ADMIN et CHEF_SERVICE : toutes les anomalies.
+    CHEF_SECTEUR : anomalies de ses secteurs accessibles.
+    TECHNICIEN : uniquement ses propres déclarations.
     """
 
     if (
@@ -20,12 +27,22 @@ def get_anomalies_for_user(user):
 
     query = Anomaly.query
 
-    if user.role in ("ADMIN", "CHEF_SECTEUR"):
-        # ADMIN et CHEF_SECTEUR voient toutes les anomalies.
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
         pass
 
-    elif user.role == "TECHNICIEN":
-        # Le technicien voit uniquement ses déclarations.
+    elif user.role == ROLE_CHEF:
+        from app.services.permissions import get_accessible_sector_ids
+
+        sector_ids = get_accessible_sector_ids(user)
+
+        if not sector_ids:
+            return []
+
+        query = query.filter(
+            Anomaly.sector_id.in_(sector_ids)
+        )
+
+    elif user.role == ROLE_TECHNICIEN:
         query = query.filter(
             Anomaly.technician_id == user.id
         )

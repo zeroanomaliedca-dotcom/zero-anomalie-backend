@@ -4,7 +4,13 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 
 from app.models import Anomaly, Sector, Category
-from app.services.permissions import get_accessible_sector_ids
+from app.services.permissions import (
+    ROLE_ADMIN,
+    ROLE_CHEF,
+    ROLE_CHEF_SERVICE,
+    ROLE_TECHNICIEN,
+    get_accessible_sector_ids,
+)
 
 
 STATUSES = [
@@ -15,33 +21,46 @@ STATUSES = [
 
 
 def get_dashboard_statistics(user):
-    """Calcule les statistiques selon le profil connecte."""
+    """Calcule les statistiques selon le profil connecté."""
 
-    if not user or not user.is_active:
+    if (
+        not user
+        or not user.is_active
+        or user.deleted_at is not None
+    ):
         return None
 
     query = Anomaly.query
 
-    if user.role == "ADMIN":
+    # ADMIN et CHEF_SERVICE : toutes les anomalies.
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
         pass
 
-    elif user.role == "CHEF_SECTEUR":
+    # CHEF_SECTEUR : anomalies des secteurs accessibles.
+    elif user.role == ROLE_CHEF:
         sector_ids = get_accessible_sector_ids(user)
 
         if not sector_ids:
             query = query.filter(Anomaly.id == -1)
         else:
-            query = query.filter(Anomaly.sector_id.in_(sector_ids))
+            query = query.filter(
+                Anomaly.sector_id.in_(sector_ids)
+            )
 
-    elif user.role == "TECHNICIEN":
-        query = query.filter(Anomaly.technician_id == user.id)
+    # TECHNICIEN : uniquement ses propres anomalies.
+    elif user.role == ROLE_TECHNICIEN:
+        query = query.filter(
+            Anomaly.technician_id == user.id
+        )
 
     else:
         return None
 
     total = query.count()
 
-    status_counts = {status: 0 for status in STATUSES}
+    status_counts = {
+        status: 0 for status in STATUSES
+    }
 
     status_results = (
         query.with_entities(
@@ -56,14 +75,22 @@ def get_dashboard_statistics(user):
         status_counts[status] = count
 
     sector_results = (
-        query.join(Sector, Anomaly.sector_id == Sector.id)
+        query.join(
+            Sector,
+            Anomaly.sector_id == Sector.id
+        )
         .with_entities(
             Sector.id,
             Sector.name,
             func.count(Anomaly.id)
         )
-        .group_by(Sector.id, Sector.name)
-        .order_by(func.count(Anomaly.id).desc())
+        .group_by(
+            Sector.id,
+            Sector.name
+        )
+        .order_by(
+            func.count(Anomaly.id).desc()
+        )
         .all()
     )
 
@@ -77,14 +104,22 @@ def get_dashboard_statistics(user):
     ]
 
     category_results = (
-        query.join(Category, Anomaly.category_id == Category.id)
+        query.join(
+            Category,
+            Anomaly.category_id == Category.id
+        )
         .with_entities(
             Category.id,
             Category.name,
             func.count(Anomaly.id)
         )
-        .group_by(Category.id, Category.name)
-        .order_by(func.count(Anomaly.id).desc())
+        .group_by(
+            Category.id,
+            Category.name
+        )
+        .order_by(
+            func.count(Anomaly.id).desc()
+        )
         .all()
     )
 
@@ -119,8 +154,12 @@ def get_dashboard_statistics(user):
             func.date(Anomaly.created_at),
             func.count(Anomaly.id)
         )
-        .group_by(func.date(Anomaly.created_at))
-        .order_by(func.date(Anomaly.created_at))
+        .group_by(
+            func.date(Anomaly.created_at)
+        )
+        .order_by(
+            func.date(Anomaly.created_at)
+        )
         .all()
     )
 
@@ -136,11 +175,15 @@ def get_dashboard_statistics(user):
 
         evolution.append({
             "date": day.isoformat(),
-            "count": daily_counts.get(day.isoformat(), 0),
+            "count": daily_counts.get(
+                day.isoformat(), 0
+            ),
         })
 
     recent_anomalies = (
-        query.order_by(Anomaly.created_at.desc())
+        query.order_by(
+            Anomaly.created_at.desc()
+        )
         .limit(10)
         .all()
     )
