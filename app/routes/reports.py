@@ -2,7 +2,7 @@
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 
 from app.models.anomaly import Anomaly
 from app.models.category import Category
@@ -13,6 +13,7 @@ from app.services.permissions import (
     role_required,
     ROLE_ADMIN,
     ROLE_CHEF,
+    ROLE_CHEF_SERVICE,
 )
 
 from app.services.powerpoint_service import generate_powerpoint
@@ -53,7 +54,12 @@ def _parse_ids(value, field_name):
 
 
 def _get_accessible_sector_ids(user):
-    if user.role == ROLE_ADMIN:
+    """
+    ADMIN et CHEF_SERVICE : tous les secteurs actifs.
+    CHEF_SECTEUR : uniquement ses secteurs affectés.
+    """
+
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
         return [
             sector.id
             for sector in Sector.query.filter_by(
@@ -73,11 +79,11 @@ def _get_accessible_sector_ids(user):
 
 # ==================================================
 # GET : OPTIONS DISPONIBLES POUR LE RAPPORT
-# ADMIN ET CHEF_SECTEUR UNIQUEMENT
+# ADMIN, CHEF_SERVICE ET CHEF_SECTEUR
 # ==================================================
 
 @reports_bp.get("/options")
-@role_required(ROLE_ADMIN, ROLE_CHEF)
+@role_required(ROLE_ADMIN, ROLE_CHEF_SERVICE, ROLE_CHEF)
 def report_options():
 
     user = current_user()
@@ -121,12 +127,12 @@ def report_options():
 
 
 # ==================================================
-# POST : GENERATION ET ENVOI DU RAPPORT POWERPOINT
-# ADMIN ET CHEF_SECTEUR UNIQUEMENT
+# POST : GENERATION ET TELECHARGEMENT DU RAPPORT
+# ADMIN, CHEF_SERVICE ET CHEF_SECTEUR
 # ==================================================
 
 @reports_bp.post("/powerpoint")
-@role_required(ROLE_ADMIN, ROLE_CHEF)
+@role_required(ROLE_ADMIN, ROLE_CHEF_SERVICE, ROLE_CHEF)
 def export_powerpoint_report():
 
     user = current_user()
@@ -345,58 +351,37 @@ def export_powerpoint_report():
         ]
 
         # ------------------------------------------
-        # ENVOI AUTOMATIQUE PAR E-MAIL
+        # TELECHARGEMENT DIRECT DU POWERPOINT
+        # L'ENVOI PAR E-MAIL SERA TRAITE SEPAREMENT
         # ------------------------------------------
 
-        email_sent, email_message = send_powerpoint_report(
-            powerpoint_file=powerpoint_file,
-            filename=filename,
-            start_date=start_date,
-            end_date=end_date,
-            sector_names=sector_names,
-            category_names=category_names
-        )
-
-        if not email_sent:
-            return jsonify({
-                "status": "error",
-                "message": email_message,
-                "report_generated": True,
-                "email_sent": False
-            }), 502
-
         current_app.logger.info(
-            "Rapport généré et envoyé. "
-            "Utilisateur=%s, anomalies=%s",
+            "Rapport généré pour téléchargement. "
+            "Utilisateur=%s, rôle=%s, anomalies=%s",
             user.username,
+            user.role,
             len(anomalies)
         )
 
-        return jsonify({
-            "status": "success",
-            "message": (
-                "Le rapport PowerPoint a été généré "
-                "et envoyé par e-mail avec succès."
+        return send_file(
+            powerpoint_file,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "presentationml.presentation"
             ),
-            "recipient": "i.elayyate@iam.ma",
-            "filename": filename,
-            "anomalies_count": len(anomalies),
-            "sectors": sector_names,
-            "categories": category_names,
-            "start_date": start_date.strftime("%Y-%m-%d"),
-            "end_date": end_date.strftime("%Y-%m-%d")
-        }), 200
+            as_attachment=True,
+            download_name=filename
+        )
 
     except Exception:
         current_app.logger.exception(
-            "Erreur pendant la génération ou l'envoi "
-            "du rapport PowerPoint."
+            "Erreur pendant la génération du rapport PowerPoint."
         )
 
         return jsonify({
             "status": "error",
             "message": (
                 "Une erreur est survenue pendant "
-                "la génération ou l'envoi du rapport."
+                "la génération du rapport PowerPoint."
             )
         }), 500
