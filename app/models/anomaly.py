@@ -1,8 +1,10 @@
+
 from datetime import datetime, timezone
 
 from app.extensions import db
 from app.models.sector import Sector
 from app.models.category import Category
+from app.models.user import User
 
 
 class Anomaly(db.Model):
@@ -33,6 +35,7 @@ class Anomaly(db.Model):
     def to_dict(self):
         sector = db.session.get(Sector, self.sector_id)
         category = db.session.get(Category, self.category_id)
+        technician = db.session.get(User, self.technician_id)
 
         return {
             "id": self.id,
@@ -46,6 +49,7 @@ class Anomaly(db.Model):
             "category_id": self.category_id,
             "category_name": category.name if category else None,
             "technician_id": self.technician_id,
+            "technician_name": technician.full_name if technician else None,
             "latitude": float(self.latitude) if self.latitude is not None else None,
             "longitude": float(self.longitude) if self.longitude is not None else None,
             "location_address": self.location_address,

@@ -13,6 +13,7 @@ from app.services.permissions import (
     role_required,
     ROLE_ADMIN,
     ROLE_CHEF,
+    ROLE_CHEF_SERVICE,
 )
 
 from app.services.powerpoint_service import generate_powerpoint
@@ -53,7 +54,8 @@ def _parse_ids(value, field_name):
 
 
 def _get_accessible_sector_ids(user):
-    if user.role == ROLE_ADMIN:
+    # ADMIN et CHEF_SERVICE : tous les secteurs actifs.
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
         return [
             sector.id
             for sector in Sector.query.filter_by(
@@ -61,6 +63,7 @@ def _get_accessible_sector_ids(user):
             ).all()
         ]
 
+    # CHEF_SECTEUR : uniquement ses secteurs actifs.
     if user.role == ROLE_CHEF:
         return [
             sector.id
@@ -73,11 +76,11 @@ def _get_accessible_sector_ids(user):
 
 # ==================================================
 # GET : OPTIONS DISPONIBLES POUR LE RAPPORT
-# ADMIN ET CHEF_SECTEUR UNIQUEMENT
+# ADMIN, CHEF_SERVICE ET CHEF_SECTEUR
 # ==================================================
 
 @reports_bp.get("/options")
-@role_required(ROLE_ADMIN, ROLE_CHEF)
+@role_required(ROLE_ADMIN, ROLE_CHEF, ROLE_CHEF_SERVICE)
 def report_options():
 
     user = current_user()
@@ -122,11 +125,11 @@ def report_options():
 
 # ==================================================
 # POST : GENERATION ET ENVOI DU RAPPORT POWERPOINT
-# ADMIN ET CHEF_SECTEUR UNIQUEMENT
+# ADMIN, CHEF_SERVICE ET CHEF_SECTEUR
 # ==================================================
 
 @reports_bp.post("/powerpoint")
-@role_required(ROLE_ADMIN, ROLE_CHEF)
+@role_required(ROLE_ADMIN, ROLE_CHEF, ROLE_CHEF_SERVICE)
 def export_powerpoint_report():
 
     user = current_user()

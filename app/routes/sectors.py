@@ -17,9 +17,8 @@ sectors_bp = Blueprint(
 
 # ==========================================
 # GET : LISTE DES SECTEURS
-# ADMIN : tous les secteurs
-# CHEF_SECTEUR : tous les secteurs actifs
-# TECHNICIEN : tous les secteurs actifs
+# ADMIN et CHEF_SERVICE : tous les secteurs
+# CHEF_SECTEUR et TECHNICIEN : secteurs actifs
 # ==========================================
 @sectors_bp.get("")
 @jwt_required()
@@ -34,13 +33,11 @@ def list_sectors():
 
     query = Sector.query
 
-    if user.role == "ADMIN":
-        # L'administrateur voit tous les secteurs,
+    if user.role in ("ADMIN", "CHEF_SERVICE"):
+        # ADMIN et CHEF_SERVICE voient tous les secteurs,
         # y compris les secteurs désactivés.
         pass
     else:
-        # Le chef de secteur et le technicien voient
-        # tous les secteurs actifs.
         query = query.filter_by(is_active=True)
 
     sectors = query.order_by(Sector.name.asc()).all()
@@ -54,11 +51,11 @@ def list_sectors():
 
 # ==========================================
 # POST : CREATION D'UN SECTEUR
-# ADMIN uniquement
+# ADMIN et CHEF_SERVICE
 # ==========================================
 @sectors_bp.post("")
 @jwt_required()
-@role_required("ADMIN")
+@role_required("ADMIN", "CHEF_SERVICE")
 def create_sector():
     data = request.get_json(silent=True) or {}
 
@@ -114,11 +111,11 @@ def create_sector():
 
 # ==========================================
 # PUT : MODIFICATION D'UN SECTEUR
-# ADMIN uniquement
+# ADMIN et CHEF_SERVICE
 # ==========================================
 @sectors_bp.put("/<int:sector_id>")
 @jwt_required()
-@role_required("ADMIN")
+@role_required("ADMIN", "CHEF_SERVICE")
 def update_sector(sector_id):
     sector = db.session.get(Sector, sector_id)
 
@@ -185,11 +182,11 @@ def update_sector(sector_id):
 
 # ==========================================
 # PATCH : ACTIVATION / DESACTIVATION
-# ADMIN uniquement
+# ADMIN et CHEF_SERVICE
 # ==========================================
 @sectors_bp.patch("/<int:sector_id>/status")
 @jwt_required()
-@role_required("ADMIN")
+@role_required("ADMIN", "CHEF_SERVICE")
 def update_sector_status(sector_id):
     sector = db.session.get(Sector, sector_id)
 

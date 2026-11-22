@@ -1,4 +1,4 @@
-
+﻿
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
@@ -18,6 +18,7 @@ users_bp = Blueprint(
 
 # =====================================================
 # 1. CONSULTER LES UTILISATEURS NON SUPPRIMES
+# ADMIN et CHEF_SERVICE
 # =====================================================
 
 @users_bp.get("")
@@ -38,6 +39,7 @@ def list_users():
 
 # =====================================================
 # 2. CREER UN UTILISATEUR
+# ADMIN uniquement
 # =====================================================
 
 @users_bp.post("")
@@ -50,7 +52,7 @@ def create_user():
     if not isinstance(data, dict):
         return jsonify({
             "status": "error",
-            "message": "Données JSON invalides."
+            "message": "DonnÃ©es JSON invalides."
         }), 400
 
     username = data.get("username")
@@ -62,7 +64,7 @@ def create_user():
     if not all([username, full_name, password, role]):
         return jsonify({
             "status": "error",
-            "message": "Tous les champs obligatoires doivent être renseignés."
+            "message": "Tous les champs obligatoires doivent Ãªtre renseignÃ©s."
         }), 400
 
     if not isinstance(username, str) or not isinstance(full_name, str):
@@ -74,7 +76,7 @@ def create_user():
     if not isinstance(role, str):
         return jsonify({
             "status": "error",
-            "message": "Rôle invalide."
+            "message": "RÃ´le invalide."
         }), 400
 
     username = username.strip()
@@ -90,43 +92,43 @@ def create_user():
     if len(username) > 80 or len(full_name) > 150:
         return jsonify({
             "status": "error",
-            "message": "Longueur maximale dépassée."
+            "message": "Longueur maximale dÃ©passÃ©e."
         }), 400
 
     if not isinstance(password, str) or len(password) < 12:
         return jsonify({
             "status": "error",
-            "message": "Le mot de passe doit contenir au moins 12 caractères."
+            "message": "Le mot de passe doit contenir au moins 12 caractÃ¨res."
         }), 400
 
-    if role not in ["TECHNICIEN", "CHEF_SECTEUR"]:
+    if role not in ["TECHNICIEN", "CHEF_SECTEUR", "CHEF_SERVICE"]:
         return jsonify({
             "status": "error",
-            "message": "Rôle invalide. ADMIN ne peut pas être créé par cette route."
+            "message": "RÃ´le invalide. ADMIN ne peut pas Ãªtre crÃ©Ã© par cette route."
         }), 400
 
     if User.query.filter_by(username=username).first():
         return jsonify({
             "status": "error",
-            "message": "Ce nom d'utilisateur existe déjà."
+            "message": "Ce nom d'utilisateur existe dÃ©jÃ ."
         }), 409
 
     if not isinstance(sector_ids, list):
         return jsonify({
             "status": "error",
-            "message": "sector_ids doit être une liste."
+            "message": "sector_ids doit Ãªtre une liste."
         }), 400
 
     if role == "CHEF_SECTEUR" and not sector_ids:
         return jsonify({
             "status": "error",
-            "message": "Un chef doit être affecté à au moins un secteur."
+            "message": "Un chef de secteur doit Ãªtre affectÃ© Ã  au moins un secteur."
         }), 400
 
-    if role == "TECHNICIEN" and sector_ids:
+    if role in ("TECHNICIEN", "CHEF_SERVICE") and sector_ids:
         return jsonify({
             "status": "error",
-            "message": "Un technicien ne peut pas recevoir d'affectation fixe de secteur."
+            "message": "Ce rÃ´le ne nÃ©cessite pas d'affectation fixe de secteur."
         }), 400
 
     if any(type(sid) is not int or sid <= 0 for sid in sector_ids):
@@ -173,18 +175,19 @@ def create_user():
         db.session.rollback()
         return jsonify({
             "status": "error",
-            "message": "Impossible de créer le compte."
+            "message": "Impossible de crÃ©er le compte."
         }), 500
 
     return jsonify({
         "status": "success",
-        "message": "Compte créé avec succès.",
+        "message": "Compte crÃ©Ã© avec succÃ¨s.",
         "user": user.to_dict()
     }), 201
 
 
 # =====================================================
 # 3. MODIFIER UN UTILISATEUR
+# ADMIN et CHEF_SERVICE
 # =====================================================
 
 @users_bp.put("/<int:user_id>")
@@ -211,7 +214,7 @@ def update_user(user_id):
     if not isinstance(data, dict) or not data:
         return jsonify({
             "status": "error",
-            "message": "Données JSON invalides ou vides."
+            "message": "DonnÃ©es JSON invalides ou vides."
         }), 400
 
     allowed_fields = {
@@ -224,7 +227,7 @@ def update_user(user_id):
     if not set(data.keys()).issubset(allowed_fields):
         return jsonify({
             "status": "error",
-            "message": "Un ou plusieurs champs ne sont pas autorisés."
+            "message": "Un ou plusieurs champs ne sont pas autorisÃ©s."
         }), 400
 
     new_full_name = user.full_name
@@ -245,7 +248,7 @@ def update_user(user_id):
         if not new_full_name or len(new_full_name) > 150:
             return jsonify({
                 "status": "error",
-                "message": "Le nom complet est obligatoire et limité à 150 caractères."
+                "message": "Le nom complet est obligatoire et limitÃ© Ã  150 caractÃ¨res."
             }), 400
 
     if "role" in data:
@@ -253,15 +256,15 @@ def update_user(user_id):
         if not isinstance(data["role"], str):
             return jsonify({
                 "status": "error",
-                "message": "Rôle invalide."
+                "message": "RÃ´le invalide."
             }), 400
 
         new_role = data["role"].strip().upper()
 
-        if new_role not in ["TECHNICIEN", "CHEF_SECTEUR"]:
+        if new_role not in ["TECHNICIEN", "CHEF_SECTEUR", "CHEF_SERVICE"]:
             return jsonify({
                 "status": "error",
-                "message": "Seuls les rôles TECHNICIEN et CHEF_SECTEUR sont autorisés."
+                "message": "RÃ´le invalide."
             }), 400
 
     if new_password is not None:
@@ -269,7 +272,7 @@ def update_user(user_id):
         if not isinstance(new_password, str) or len(new_password) < 12:
             return jsonify({
                 "status": "error",
-                "message": "Le nouveau mot de passe doit contenir au moins 12 caractères."
+                "message": "Le nouveau mot de passe doit contenir au moins 12 caractÃ¨res."
             }), 400
 
     if new_sector_ids is not None:
@@ -277,7 +280,7 @@ def update_user(user_id):
         if not isinstance(new_sector_ids, list):
             return jsonify({
                 "status": "error",
-                "message": "sector_ids doit être une liste."
+                "message": "sector_ids doit Ãªtre une liste."
             }), 400
 
         if any(
@@ -295,17 +298,17 @@ def update_user(user_id):
                 "message": "La liste contient des secteurs en double."
             }), 400
 
-    if new_role == "TECHNICIEN":
+    if new_role in ("TECHNICIEN", "CHEF_SERVICE"):
 
         if new_sector_ids:
             return jsonify({
                 "status": "error",
-                "message": "Un technicien ne peut pas avoir de secteur affecté."
+                "message": "Ce rÃ´le ne peut pas avoir de secteur affectÃ©."
             }), 400
 
         sectors = []
 
-    else:
+    elif new_role == "CHEF_SECTEUR":
 
         if new_sector_ids is None:
 
@@ -315,7 +318,7 @@ def update_user(user_id):
             else:
                 return jsonify({
                     "status": "error",
-                    "message": "Un chef doit être affecté à au moins un secteur."
+                    "message": "Un chef de secteur doit Ãªtre affectÃ© Ã  au moins un secteur."
                 }), 400
 
         else:
@@ -323,7 +326,7 @@ def update_user(user_id):
             if not new_sector_ids:
                 return jsonify({
                     "status": "error",
-                    "message": "Un chef doit être affecté à au moins un secteur."
+                    "message": "Un chef de secteur doit Ãªtre affectÃ© Ã  au moins un secteur."
                 }), 400
 
             sectors = Sector.query.filter(
@@ -356,13 +359,14 @@ def update_user(user_id):
 
     return jsonify({
         "status": "success",
-        "message": "Compte modifié avec succès.",
+        "message": "Compte modifiÃ© avec succÃ¨s.",
         "user": user.to_dict()
     }), 200
 
 
 # =====================================================
 # 4. ACTIVER / DESACTIVER UN UTILISATEUR
+# ADMIN et CHEF_SERVICE
 # =====================================================
 
 @users_bp.patch("/<int:user_id>/status")
@@ -375,13 +379,13 @@ def update_user_status(user_id):
     if not admin:
         return jsonify({
             "status": "error",
-            "message": "Administrateur non autorisé."
+            "message": "Utilisateur non autorisÃ©."
         }), 401
 
     if admin.id == user_id:
         return jsonify({
             "status": "error",
-            "message": "Vous ne pouvez pas désactiver votre propre compte."
+            "message": "Vous ne pouvez pas dÃ©sactiver votre propre compte."
         }), 403
 
     user = db.session.get(User, user_id)
@@ -403,7 +407,7 @@ def update_user_status(user_id):
     if not isinstance(data, dict) or type(data.get("is_active")) is not bool:
         return jsonify({
             "status": "error",
-            "message": "Le champ is_active doit être true ou false."
+            "message": "Le champ is_active doit Ãªtre true ou false."
         }), 400
 
     user.is_active = data["is_active"]
@@ -420,13 +424,14 @@ def update_user_status(user_id):
 
     return jsonify({
         "status": "success",
-        "message": "Statut du compte modifié avec succès.",
+        "message": "Statut du compte modifiÃ© avec succÃ¨s.",
         "user": user.to_dict()
     }), 200
 
 
 # =====================================================
 # 5. SUPPRESSION LOGIQUE D'UN UTILISATEUR
+# ADMIN et CHEF_SERVICE
 # =====================================================
 
 @users_bp.delete("/<int:user_id>")
@@ -439,7 +444,7 @@ def delete_user(user_id):
     if not admin:
         return jsonify({
             "status": "error",
-            "message": "Administrateur non autorisé."
+            "message": "Utilisateur non autorisÃ©."
         }), 401
 
     if admin.id == user_id:
@@ -477,5 +482,6 @@ def delete_user(user_id):
 
     return jsonify({
         "status": "success",
-        "message": "Compte supprimé. Son historique est conservé."
+        "message": "Compte supprimÃ©. Son historique est conservÃ©."
     }), 200
+

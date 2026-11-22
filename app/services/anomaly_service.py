@@ -29,8 +29,10 @@ ALLOWED_FORMATS = {
     "TIFF": ".tiff",
 }
 
+# Tous les profils opérationnels peuvent déclarer une anomalie.
 ALLOWED_DECLARATION_ROLES = {
     "ADMIN",
+    "CHEF_SERVICE",
     "CHEF_SECTEUR",
     "TECHNICIEN",
 }

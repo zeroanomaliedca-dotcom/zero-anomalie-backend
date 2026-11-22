@@ -12,6 +12,7 @@ from app.models import User, Sector
 
 ROLE_ADMIN = "ADMIN"
 ROLE_CHEF = "CHEF_SECTEUR"
+ROLE_CHEF_SERVICE = "CHEF_SERVICE"
 ROLE_TECHNICIEN = "TECHNICIEN"
 
 
@@ -67,12 +68,10 @@ def role_required(*allowed_roles):
     return decorator
 
 
-def user_can_access_sector(user, sector_id):
+def get_accessible_sector_ids(user):
     """
-    Vérifie si un utilisateur peut accéder à un secteur.
-
-    ADMIN : tous les secteurs actifs.
-    CHEF_SECTEUR : tous les secteurs actifs.
+    ADMIN et CHEF_SERVICE : tous les secteurs actifs.
+    CHEF_SECTEUR : uniquement les secteurs attribués.
     TECHNICIEN : aucun accès supplémentaire par cette fonction.
     """
 
@@ -81,23 +80,55 @@ def user_can_access_sector(user, sector_id):
         or user.deleted_at is not None
         or not user.is_active
     ):
+        return []
+
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
+        return [
+            sector.id
+            for sector in Sector.query.filter_by(
+                is_active=True
+            ).all()
+        ]
+
+    if user.role == ROLE_CHEF:
+        return [
+            sector.id
+            for sector in user.sectors
+            if sector.is_active
+        ]
+
+    return []
+
+
+def user_can_access_sector(user, sector_id):
+    """Vérifie l'accès de l'utilisateur à un secteur actif."""
+
+    if (
+        not user
+        or user.deleted_at is not None
+        or not user.is_active
+    ):
         return False
 
-    if user.role in (ROLE_ADMIN, ROLE_CHEF):
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
         return Sector.query.filter_by(
             id=sector_id,
             is_active=True
         ).first() is not None
+
+    if user.role == ROLE_CHEF:
+        return any(
+            sector.id == sector_id and sector.is_active
+            for sector in user.sectors
+        )
 
     return False
 
 
 def user_can_access_anomaly(user, anomaly):
     """
-    Vérifie les droits d'accès à une anomalie.
-
-    ADMIN : toutes les anomalies.
-    CHEF_SECTEUR : toutes les anomalies des trois secteurs.
+    ADMIN et CHEF_SERVICE : toutes les anomalies.
+    CHEF_SECTEUR : uniquement les anomalies de ses secteurs attribués.
     TECHNICIEN : uniquement ses propres anomalies.
     """
 
@@ -109,37 +140,16 @@ def user_can_access_anomaly(user, anomaly):
     ):
         return False
 
-    if user.role in (ROLE_ADMIN, ROLE_CHEF):
+    if user.role in (ROLE_ADMIN, ROLE_CHEF_SERVICE):
         return True
+
+    if user.role == ROLE_CHEF:
+        return any(
+            sector.id == anomaly.sector_id and sector.is_active
+            for sector in user.sectors
+        )
 
     if user.role == ROLE_TECHNICIEN:
         return anomaly.technician_id == user.id
 
     return False
-
-
-def get_accessible_sector_ids(user):
-    """
-    Retourne les secteurs accessibles selon le rôle.
-
-    ADMIN : tous les secteurs actifs.
-    CHEF_SECTEUR : tous les secteurs actifs.
-    TECHNICIEN : aucun secteur supplémentaire.
-    """
-
-    if (
-        not user
-        or user.deleted_at is not None
-        or not user.is_active
-    ):
-        return []
-
-    if user.role in (ROLE_ADMIN, ROLE_CHEF):
-        return [
-            sector.id
-            for sector in Sector.query.filter_by(
-                is_active=True
-            ).all()
-        ]
-
-    return []

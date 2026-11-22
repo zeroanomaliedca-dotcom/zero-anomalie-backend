@@ -41,11 +41,11 @@ def list_categories():
 
 # ==========================================
 # POST : CREATION D'UNE CATEGORIE
-# ADMIN uniquement
+# ADMIN et CHEF_SERVICE
 # ==========================================
 @categories_bp.post("")
 @jwt_required()
-@role_required("ADMIN")
+@role_required("ADMIN", "CHEF_SERVICE")
 def create_category():
     data = request.get_json(silent=True) or {}
 
@@ -109,11 +109,11 @@ def create_category():
 
 # ==========================================
 # PUT : MODIFICATION D'UNE CATEGORIE
-# ADMIN uniquement
+# ADMIN et CHEF_SERVICE
 # ==========================================
 @categories_bp.put("/<int:category_id>")
 @jwt_required()
-@role_required("ADMIN")
+@role_required("ADMIN", "CHEF_SERVICE")
 def update_category(category_id):
     category = db.session.get(Category, category_id)
 
@@ -186,11 +186,11 @@ def update_category(category_id):
 
 # ==========================================
 # PATCH : ACTIVATION / DESACTIVATION
-# ADMIN uniquement
+# ADMIN et CHEF_SERVICE
 # ==========================================
 @categories_bp.patch("/<int:category_id>/status")
 @jwt_required()
-@role_required("ADMIN")
+@role_required("ADMIN", "CHEF_SERVICE")
 def update_category_status(category_id):
     category = db.session.get(Category, category_id)
 

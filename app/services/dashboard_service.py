@@ -22,7 +22,8 @@ def get_dashboard_statistics(user):
 
     query = Anomaly.query
 
-    if user.role == "ADMIN":
+    if user.role in ("ADMIN", "CHEF_SERVICE"):
+        # ADMIN et CHEF_SERVICE voient toutes les anomalies.
         pass
 
     elif user.role == "CHEF_SECTEUR":

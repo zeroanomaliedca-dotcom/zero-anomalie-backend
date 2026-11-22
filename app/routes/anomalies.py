@@ -1,4 +1,6 @@
 
+from pathlib import Path, PureWindowsPath
+
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,6 +12,7 @@ from app.models import Anomaly
 from app.services.permissions import (
     current_user,
     role_required,
+    user_can_access_anomaly,
 )
 
 from app.services.anomaly_service import (
@@ -29,14 +32,41 @@ anomalies_bp = Blueprint(
 )
 
 
+def get_safe_photo_path(file_path):
+    """Retourne un chemin photo uniquement s'il reste dans UPLOAD_FOLDER."""
+
+    if not isinstance(file_path, str) or not file_path.strip():
+        return None
+
+    normalized_path = file_path.replace("\\", "/")
+    windows_path = PureWindowsPath(normalized_path)
+
+    if (
+        windows_path.is_absolute()
+        or windows_path.drive
+        or ".." in normalized_path.split("/")
+        or normalized_path.startswith("/")
+    ):
+        return None
+
+    upload_folder = Path(
+        current_app.config["UPLOAD_FOLDER"]
+    ).resolve()
+
+    photo_path = (upload_folder / normalized_path).resolve()
+
+    if not photo_path.is_relative_to(upload_folder):
+        return None
+
+    return photo_path
+
+
 # ==========================================
 # POST : CREATION D'UNE ANOMALIE
-# ADMIN, CHEF_SECTEUR et TECHNICIEN
-# Le CHEF_SECTEUR peut choisir n'importe quel secteur.
 # ==========================================
 @anomalies_bp.post("")
 @jwt_required()
-@role_required("ADMIN", "CHEF_SECTEUR", "TECHNICIEN")
+@role_required("ADMIN", "CHEF_SERVICE", "CHEF_SECTEUR", "TECHNICIEN")
 def create_declaration():
     user = current_user()
 
@@ -51,6 +81,16 @@ def create_declaration():
     try:
         sector_id = int(data.get("sector_id", ""))
         category_id = int(data.get("category_id", ""))
+
+        # Un CHEF_SECTEUR ne peut déclarer que dans ses secteurs attribués.
+        if user.role == "CHEF_SECTEUR":
+            from app.services.permissions import user_can_access_sector
+
+            if not user_can_access_sector(user, sector_id):
+                return jsonify({
+                    "status": "error",
+                    "message": "Vous ne pouvez pas déclarer une anomalie dans ce secteur."
+                }), 403
 
         anomaly = create_anomaly(
             technician_id=user.id,
@@ -119,9 +159,6 @@ def create_declaration():
 
 # ==========================================
 # GET : LISTE DES ANOMALIES
-# ADMIN : toutes les anomalies
-# CHEF_SECTEUR : anomalies des trois secteurs
-# TECHNICIEN : selon ses droits actuels
 # ==========================================
 @anomalies_bp.get("")
 @jwt_required()
@@ -134,7 +171,12 @@ def list_anomalies():
             "message": "Utilisateur introuvable ou désactivé."
         }), 401
 
-    anomalies = get_anomalies_for_user(user)
+    reference = request.args.get("reference", "").strip()
+
+    anomalies = get_anomalies_for_user(
+        user,
+        reference=reference
+    )
 
     return jsonify({
         "status": "success",
@@ -181,13 +223,10 @@ def my_anomalies():
 
 # ==========================================
 # PATCH : MODIFICATION DU STATUT
-# ADMIN et CHEF_SECTEUR
-# Le CHEF_SECTEUR peut traiter les anomalies
-# de tous les secteurs.
 # ==========================================
 @anomalies_bp.patch("/<int:anomaly_id>/status")
 @jwt_required()
-@role_required("ADMIN", "CHEF_SECTEUR")
+@role_required("ADMIN", "CHEF_SERVICE", "CHEF_SECTEUR")
 def change_anomaly_status(anomaly_id):
     user = current_user()
 
@@ -205,8 +244,12 @@ def change_anomaly_status(anomaly_id):
             "message": "Anomalie introuvable."
         }), 404
 
-    # L'ADMIN et le CHEF_SECTEUR peuvent traiter
-    # les anomalies de tous les secteurs.
+    if not user_can_access_anomaly(user, anomaly):
+        return jsonify({
+            "status": "error",
+            "message": "Vous n'avez pas accès à cette anomalie."
+        }), 403
+
     new_status = request.form.get("new_status", "").strip()
     comment = request.form.get("comment", "").strip()
     photos = request.files.getlist("photos")
@@ -263,8 +306,6 @@ def change_anomaly_status(anomaly_id):
 
 # ==========================================
 # GET : DETAIL D'UNE ANOMALIE
-# ADMIN et CHEF_SECTEUR : accès à tous les secteurs
-# TECHNICIEN : conservation de ses droits actuels
 # ==========================================
 @anomalies_bp.get("/<int:anomaly_id>")
 @jwt_required()
@@ -285,20 +326,98 @@ def get_anomaly_detail(anomaly_id):
             "message": "Anomalie introuvable."
         }), 404
 
-    # Le contrôle précis des droits sera appliqué
-    # après adaptation de user_can_access_anomaly.
-    if user.role not in ("ADMIN", "CHEF_SECTEUR"):
-        from app.services.permissions import user_can_access_anomaly
-
-        if not user_can_access_anomaly(user, anomaly):
-            return jsonify({
-                "status": "error",
-                "message": "Vous n'avez pas accès à cette anomalie."
-            }), 403
+    if not user_can_access_anomaly(user, anomaly):
+        return jsonify({
+            "status": "error",
+            "message": "Vous n'avez pas accès à cette anomalie."
+        }), 403
 
     details = get_anomaly_details(anomaly)
 
     return jsonify({
         "status": "success",
         "anomaly": details,
+    }), 200
+
+
+# ==========================================
+# DELETE : SUPPRESSION D'UNE ANOMALIE
+# ADMIN uniquement
+# ==========================================
+@anomalies_bp.delete("/<int:anomaly_id>")
+@jwt_required()
+@role_required("ADMIN")
+def delete_anomaly(anomaly_id):
+    user = current_user()
+
+    if not user:
+        return jsonify({
+            "status": "error",
+            "message": "Utilisateur introuvable ou désactivé."
+        }), 401
+
+    anomaly = db.session.get(Anomaly, anomaly_id)
+
+    if not anomaly:
+        return jsonify({
+            "status": "error",
+            "message": "Anomalie introuvable."
+        }), 404
+
+    reference = anomaly.reference
+
+    # Récupérer les chemins avant la suppression en base.
+    photo_paths = [
+        get_safe_photo_path(photo.file_path)
+        for photo in anomaly.photos
+    ]
+
+    try:
+        # Les relations cascade suppriment les photos et l'historique en BDD.
+        db.session.delete(anomaly)
+        db.session.commit()
+
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Erreur SQL lors de la suppression de l'anomalie %s.",
+            reference
+        )
+        return jsonify({
+            "status": "error",
+            "message": "Impossible de supprimer l'anomalie en base de données."
+        }), 500
+
+    # Suppression physique après confirmation du commit.
+    file_errors = 0
+
+    for photo_path in photo_paths:
+        if photo_path is None:
+            file_errors += 1
+            current_app.logger.warning(
+                "Chemin photo invalide lors de la suppression de %s.",
+                reference
+            )
+            continue
+
+        try:
+            photo_path.unlink(missing_ok=True)
+        except OSError:
+            file_errors += 1
+            current_app.logger.exception(
+                "Impossible de supprimer la photo %s.",
+                photo_path
+            )
+
+    current_app.logger.info(
+        "Anomalie %s supprimée par ADMIN %s.",
+        reference,
+        user.id
+    )
+
+    return jsonify({
+        "status": "success",
+        "message": "Anomalie supprimée avec succès.",
+        "reference": reference,
+        "photo_cleanup_warnings": file_errors,
     }), 200
