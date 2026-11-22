@@ -1,3 +1,4 @@
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -5,19 +6,30 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
-    # 1. Priorité à DATABASE_URL (Railway/Neon)
-    # 2. Sinon, construction locale
-    if os.getenv("DATABASE_URL"):
-        # On s'assure d'utiliser le driver psycopg2
-        SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL").replace(
-            "postgresql://", "postgresql+psycopg2://", 1
-        )
+    # Configuration PostgreSQL
+    database_url = os.getenv("DATABASE_URL")
+
+    if database_url:
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace(
+                "postgres://",
+                "postgresql+psycopg2://",
+                1
+            )
+        elif database_url.startswith("postgresql://"):
+            database_url = database_url.replace(
+                "postgresql://",
+                "postgresql+psycopg2://",
+                1
+            )
+
+        SQLALCHEMY_DATABASE_URI = database_url
     else:
-        # On utilise psycopg2 pour être cohérent avec Railway
         SQLALCHEMY_DATABASE_URI = (
             f"postgresql+psycopg2://"
             f"{os.getenv('DB_USER')}:"
@@ -27,6 +39,15 @@ class Config:
         )
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Gestion et renouvellement des connexions
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_timeout": 30,
+        "pool_size": 5,
+        "max_overflow": 10,
+    }
 
     # Configuration des fichiers uploadés
     UPLOAD_FOLDER = str(
