@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 
 from app.models import Anomaly, Sector, Category
+from app.models.user import User
 from app.services.permissions import (
     ROLE_ADMIN,
     ROLE_CHEF,
@@ -201,3 +202,48 @@ def get_dashboard_statistics(user):
             for anomaly in recent_anomalies
         ],
     }
+
+
+def get_technician_challenge():
+    """Retourne le classement global des techniciens par anomalies déclarées."""
+
+    results = (
+        User.query
+        .outerjoin(
+            Anomaly,
+            Anomaly.technician_id == User.id
+        )
+        .with_entities(
+            User.id,
+            User.full_name,
+            func.count(Anomaly.id).label("anomalies_count")
+        )
+        .filter(
+            User.role == ROLE_TECHNICIEN,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None)
+        )
+        .group_by(
+            User.id,
+            User.full_name
+        )
+        .order_by(
+            func.count(Anomaly.id).desc(),
+            User.full_name.asc()
+        )
+        .all()
+    )
+
+    return [
+        {
+            "rank": index,
+            "technician_id": technician_id,
+            "technician_name": technician_name,
+            "anomalies_count": anomalies_count,
+        }
+        for index, (
+            technician_id,
+            technician_name,
+            anomalies_count
+        ) in enumerate(results, start=1)
+    ]
