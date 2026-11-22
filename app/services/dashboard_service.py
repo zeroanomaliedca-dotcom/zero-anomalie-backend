@@ -219,7 +219,7 @@ def get_technician_challenge():
             func.count(Anomaly.id).label("anomalies_count")
         )
         .filter(
-            User.role == ROLE_TECHNICIEN,
+            User.role.in_((ROLE_ADMIN, ROLE_CHEF_SERVICE, ROLE_CHEF, ROLE_TECHNICIEN)),
             User.is_active.is_(True),
             User.deleted_at.is_(None)
         )
