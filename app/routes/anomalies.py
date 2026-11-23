@@ -1,3 +1,4 @@
+
 from pathlib import Path, PureWindowsPath
 
 from flask import Blueprint, jsonify, request, current_app
@@ -22,6 +23,7 @@ from app.services.anomaly_service import (
 from app.services.anomaly_query_service import get_anomalies_for_user
 from app.services.treatment_service import update_anomaly_status
 from app.services.email_service import send_declaration_notification
+from app.services.manual_email_service import send_manual_anomaly_email
 
 
 anomalies_bp = Blueprint(
@@ -294,6 +296,63 @@ def change_anomaly_status(anomaly_id):
             "status": "error",
             "message": "Erreur lors de l'enregistrement des photos."
         }), 500
+
+
+# ==========================================
+# POST : ENVOI MANUEL D'UN E-MAIL
+# ADMIN et CHEF_SECTEUR uniquement
+# ==========================================
+@anomalies_bp.post("/<int:anomaly_id>/email")
+@jwt_required()
+@role_required("ADMIN", "CHEF_SECTEUR")
+def send_anomaly_email(anomaly_id):
+    user = current_user()
+
+    if not user:
+        return jsonify({
+            "status": "error",
+            "message": "Utilisateur introuvable ou désactivé."
+        }), 401
+
+    anomaly = db.session.get(Anomaly, anomaly_id)
+
+    if not anomaly:
+        return jsonify({
+            "status": "error",
+            "message": "Anomalie introuvable."
+        }), 404
+
+    if not user_can_access_anomaly(user, anomaly):
+        return jsonify({
+            "status": "error",
+            "message": "Vous n'avez pas accès à cette anomalie."
+        }), 403
+
+    if anomaly.status != "EN_COURS_DE_TRAITEMENT":
+        return jsonify({
+            "status": "error",
+            "message": "L'envoi manuel est disponible uniquement pour une anomalie en cours de traitement."
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    recipients = data.get("recipients")
+
+    sent, message = send_manual_anomaly_email(
+        anomaly=anomaly,
+        recipients=recipients,
+    )
+
+    if not sent:
+        return jsonify({
+            "status": "error",
+            "message": message,
+        }), 400
+
+    return jsonify({
+        "status": "success",
+        "message": message,
+        "reference": anomaly.reference,
+    }), 200
 
 
 # ==========================================
