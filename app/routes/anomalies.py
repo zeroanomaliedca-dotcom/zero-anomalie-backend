@@ -1,4 +1,3 @@
-
 from pathlib import Path, PureWindowsPath
 
 from flask import Blueprint, jsonify, request, current_app
@@ -82,15 +81,8 @@ def create_declaration():
         sector_id = int(data.get("sector_id", ""))
         category_id = int(data.get("category_id", ""))
 
-        # Un CHEF_SECTEUR ne peut déclarer que dans ses secteurs attribués.
-        if user.role == "CHEF_SECTEUR":
-            from app.services.permissions import user_can_access_sector
-
-            if not user_can_access_sector(user, sector_id):
-                return jsonify({
-                    "status": "error",
-                    "message": "Vous ne pouvez pas déclarer une anomalie dans ce secteur."
-                }), 403
+        # Tous les rôles autorisés peuvent déclarer dans tout secteur actif.
+        # Les droits de consultation restent gérés séparément.
 
         anomaly = create_anomaly(
             technician_id=user.id,
