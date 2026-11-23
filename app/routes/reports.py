@@ -2,7 +2,7 @@
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 
 from app.models.anomaly import Anomaly
 from app.models.category import Category
@@ -17,7 +17,6 @@ from app.services.permissions import (
 )
 
 from app.services.powerpoint_service import generate_powerpoint
-from app.services.report_email_service import send_powerpoint_report
 
 
 reports_bp = Blueprint(
@@ -330,76 +329,36 @@ def export_powerpoint_report():
             f"{end_date.strftime('%Y%m%d')}.pptx"
         )
 
-        selected_sectors = (
-            Sector.query
-            .filter(Sector.id.in_(selected_sector_ids))
-            .order_by(Sector.name.asc())
-            .all()
-        )
-
-        sector_names = [
-            sector.name
-            for sector in selected_sectors
-        ]
-
-        category_names = [
-            category.name
-            for category in selected_categories
-        ]
-
-        # ------------------------------------------
-        # ENVOI AUTOMATIQUE PAR E-MAIL
-        # ------------------------------------------
-
-        email_sent, email_message = send_powerpoint_report(
-            powerpoint_file=powerpoint_file,
-            filename=filename,
-            start_date=start_date,
-            end_date=end_date,
-            sector_names=sector_names,
-            category_names=category_names
-        )
-
-        if not email_sent:
-            return jsonify({
-                "status": "error",
-                "message": email_message,
-                "report_generated": True,
-                "email_sent": False
-            }), 502
-
         current_app.logger.info(
-            "Rapport généré et envoyé. "
+            "Rapport PowerPoint généré et prêt au téléchargement. "
             "Utilisateur=%s, anomalies=%s",
             user.username,
             len(anomalies)
         )
 
-        return jsonify({
-            "status": "success",
-            "message": (
-                "Le rapport PowerPoint a été généré "
-                "et envoyé par e-mail avec succès."
+        response = send_file(
+            powerpoint_file,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "presentationml.presentation"
             ),
-            "recipient": "i.elayyate@iam.ma",
-            "filename": filename,
-            "anomalies_count": len(anomalies),
-            "sectors": sector_names,
-            "categories": category_names,
-            "start_date": start_date.strftime("%Y-%m-%d"),
-            "end_date": end_date.strftime("%Y-%m-%d")
-        }), 200
+            as_attachment=True,
+            download_name=filename,
+            max_age=0
+        )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     except Exception:
         current_app.logger.exception(
-            "Erreur pendant la génération ou l'envoi "
-            "du rapport PowerPoint."
+            "Erreur pendant la génération du rapport PowerPoint."
         )
 
         return jsonify({
             "status": "error",
             "message": (
                 "Une erreur est survenue pendant "
-                "la génération ou l'envoi du rapport."
+                "la génération du rapport PowerPoint."
             )
         }), 500
